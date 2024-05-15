@@ -89,10 +89,6 @@ This tool leverages OpenAI's GPT-4-turbo and vector databases to allow users to 
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
 
-## License
-
-This project is licensed under the MIT License.
-
 ## Acknowledgments
 
 - This project uses [OpenAI API](https://platform.openai.com/docs/guides/embeddings) for generating embeddings and interacting with language models.
@@ -100,5 +96,3 @@ This project is licensed under the MIT License.
 - Special thanks to all the contributors and the open-source community.
 
 ---
-
-Feel free to modify and enhance the `README.md` to suit your project's specific details and requirements.
