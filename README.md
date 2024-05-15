@@ -41,7 +41,7 @@ This tool leverages OpenAI's GPT-4-turbo and vector databases to allow users to 
 
 1. **Build the Vector Database (VDB) and Summarize the Codebase:**
     ```sh
-    python otherway_vguppgift.py
+    python coding_tool.py
     ```
     - The script will process the code files, build the VDB, and generate summaries.
 
