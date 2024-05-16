@@ -22,9 +22,15 @@ def get_embeddings(text):
 def extract_ast_info(file_content):
     tree = ast.parse(file_content)
     elements = []
+    metadata = {
+        "num_classes": 0,
+        "num_functions": 0,
+        "file_path": ""
+    }
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
+            metadata["num_classes"] += 1
             class_info = {
                 "type": "class",
                 "name": node.name,
@@ -46,6 +52,7 @@ def extract_ast_info(file_content):
                     class_info["methods"].append(method_info)
             elements.append(class_info)
         elif isinstance(node, ast.FunctionDef):
+            metadata["num_functions"] += 1
             function_info = {
                 "type": "function",
                 "name": node.name,
@@ -56,7 +63,7 @@ def extract_ast_info(file_content):
             }
             elements.append(function_info)
     
-    return elements
+    return elements, metadata
 
 # Step 1: Build the VDB
 print("Building Vector Database (VDB)...")
@@ -72,12 +79,19 @@ for root, dirs, files in os.walk(code_base_path):
             file_path = os.path.join(root, file)
             with open(file_path, 'r') as f:
                 code = f.read()
-                elements = extract_ast_info(code)
+                elements, metadata = extract_ast_info(code)
+                metadata["file_path"] = file_path
+                metadata_text = json.dumps(metadata)
+                metadata_embedding = get_embeddings(metadata_text)
+                index.add(np.expand_dims(metadata_embedding, axis=0))
+                file_index[chunk_counter] = {"file_path": file_path, "metadata": metadata}
+                chunk_counter += 1
+
                 for element in elements:
                     element_text = json.dumps(element)
                     embedding = get_embeddings(element_text)
                     index.add(np.expand_dims(embedding, axis=0))
-                    file_index[chunk_counter] = (file_path, element)
+                    file_index[chunk_counter] = {"file_path": file_path, "element": element, "metadata": metadata}
                     chunk_counter += 1
 
 faiss.write_index(index, "code_embeddings.index")
@@ -92,7 +106,7 @@ for root, dirs, files in os.walk(code_base_path):
             file_path = os.path.join(root, file)
             with open(file_path, 'r') as f:
                 code = f.read()
-                elements = extract_ast_info(code)
+                elements, _ = extract_ast_info(code)
 
                 # Summarize the entire file first
                 file_summary_response = openai.ChatCompletion.create(
@@ -126,19 +140,45 @@ for root, dirs, files in os.walk(code_base_path):
                 with open(summary_file_path, 'w') as summary_file:
                     json.dump({"summary": combined_summary}, summary_file)
 
-# Step 3: Simple CLI
+# Step 3: Simple CLI with RAG Implementation
 def query_codebase(question, k=5, threshold=1.0):
+    # # Handle specific metadata queries using GPT-4-turbo
+    # if re.search(r'\bhow many functions\b', question, re.IGNORECASE) or re.search(r'\bwhere is the file\b', question, re.IGNORECASE):
+    #     context = json.dumps(file_index)
+    #     response = openai.ChatCompletion.create(
+    #         model="gpt-4-turbo",
+    #         messages=[
+    #             {"role": "system", "content": "You are a helpful assistant."},
+    #             {"role": "user", "content": f"Answer the following question based on the provided context:\n\n{question}\n\nContext:\n{context}"}
+    #         ],
+    #         max_tokens=150
+    #     )
+    #     return response['choices'][0]['message']['content'].strip()
+
+    # Handle general queries
     question_embedding = get_embeddings(question)
     distances, indices = index.search(np.expand_dims(question_embedding, axis=0), k=k)
     
     relevant_files = []
     for i, dist in zip(indices[0], distances[0]):
         if i in file_index and dist < threshold:
-            file_path, element = file_index[i]
-            element_text = json.dumps(element)
-            relevant_files.append((file_path, element, dist))
+            file_data = file_index[i]
+            relevant_files.append((file_data, dist))
 
-    return sorted(relevant_files, key=lambda x: x[2])
+    return sorted(relevant_files, key=lambda x: x[1])
+
+# Function to augment retrieved information and generate a response
+def augment_and_generate(question, retrieved_info):
+    context = "\n\n".join([json.dumps(info) for info in retrieved_info])
+    response = openai.ChatCompletion.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Using the following context, answer the question:\n\n{context}\n\nQuestion: {question}"}
+        ],
+        max_tokens=150
+    )
+    return response['choices'][0]['message']['content'].strip()
 
 def get_summary(file_path):
     summary_file_path = os.path.join('summaries', f"summary_{os.path.basename(file_path).replace('.py', '').replace(os.sep, '_')}.json")
@@ -151,7 +191,7 @@ def get_summary(file_path):
 def get_ast(file_path):
     with open(file_path, 'r') as f:
         code = f.read()
-        elements = extract_ast_info(code)
+        elements, _ = extract_ast_info(code)
         return json.dumps(elements, indent=2)
 
 def suggest_changes(file_path, prompt):
@@ -192,15 +232,28 @@ if __name__ == "__main__":
                 print("Please provide a question for the query.")
                 continue
             question = command[1]
-            relevant_files = query_codebase(question, k=5)
-            if relevant_files:
-                print("Relevant files and code snippets:")
-                for file, element, dist in relevant_files:
-                    name = element['name']
-                    docstring = element['docstring'] or "No docstring available"
-                    start_line = element['start_line']
-                    end_line = element['end_line']
-                    print(f"File: {file}\nFunction: {name}\nDocstring: {docstring}\nLines: {start_line}-{end_line}\nDistance: {dist}\n{'-'*40}")
+            results = query_codebase(question, k=5)
+            if results:
+                if isinstance(results, str):  # GPT-4-turbo metadata query result
+                    print(results)
+                else:  # Regular query results
+                    print("Relevant files and code snippets:")
+                    for file_data, dist in results:
+                        file_path = file_data['file_path']
+                        if "element" in file_data:
+                            element = file_data["element"]
+                            name = element['name']
+                            docstring = element['docstring'] or "No docstring available"
+                            start_line = element['start_line']
+                            end_line = element['end_line']
+                            print(f"File: {file_path}\nFunction: {name}\nDocstring: {docstring}\nLines: {start_line}-{end_line}\nDistance: {dist}\n{'-'*40}")
+                        else:
+                            metadata = file_data["metadata"]
+                            print(f"File: {file_path}\nNumber of Functions: {metadata['num_functions']}\nNumber of Classes: {metadata['num_classes']}\n{'-'*40}")
+                    
+                    # Augment and generate a response based on retrieved information
+                    generated_response = augment_and_generate(question, [res[0] for res in results])
+                    print(f"Generated Response: {generated_response}")
             else:
                 print("No relevant files found.")
         
