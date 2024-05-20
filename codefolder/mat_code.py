@@ -27,7 +27,7 @@ def power(base, exponent):
 
 # Function to calculate the sine of an angle in radians
 def sine(angle):
-    """This function calculates the sine of an angle in radians."""
+    """This function calculates the sine of an angle in radians. sine can simulate the oscillation of a wave."""
     return math.sin(angle)
 
 # Function for Fibonacci sequence
