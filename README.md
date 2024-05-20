@@ -2,10 +2,11 @@
 
 ## Overview
 
-This tool leverages OpenAI's GPT-4-turbo and vector databases to allow users to query and modify large Python codebases effectively. The solution is designed to handle codebases that are too large to fit in the context window of modern language models, providing functionalities for querying, summarizing, analyzing, and modifying the code.
+This tool leverages OpenAI's GPT-4-turbo and vector databases to allow users to query and modify large Python codebases effectively using Retrieval-Augmented Generation (RAG). The solution is designed to handle codebases that are too large to fit in the context window of modern language models, providing functionalities for querying, summarizing, analyzing, and modifying the code.
 
 ## Features
 
+- **Retrieval-Augmented Generation (RAG)**: Combines the power of vector databases (VDBs) and GPT-4-turbo to provide relevant information and generate accurate responses.
 - **Vector Database (VDB) Building**: Populates a VDB with embeddings of code snippets to allow efficient searching.
 - **Summarization**: Generates summaries of code files and their components.
 - **Abstract Syntax Tree (AST) Parsing**: Analyzes code structure to extract detailed information about classes and functions.
@@ -89,10 +90,4 @@ This tool leverages OpenAI's GPT-4-turbo and vector databases to allow users to 
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
 
-## Acknowledgments
 
-- This project uses [OpenAI API](https://platform.openai.com/docs/guides/embeddings) for generating embeddings and interacting with language models.
-- [FAISS](https://github.com/facebookresearch/faiss) is used for the vector database.
-- Special thanks to all the contributors and the open-source community.
-
----
