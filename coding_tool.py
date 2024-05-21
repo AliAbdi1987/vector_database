@@ -195,6 +195,33 @@ def augment_and_generate(question, retrieved_info):
     )
     return response['choices'][0]['message']['content'].strip()
 
+def log_query_results(query, results, response):
+    # Convert results to a pretty string format
+    log_entry = f"Query: {query}\n\n"
+    log_entry += "Results:\n"
+    for result, dist in results:
+        log_entry += f"File: {result['file_path']}\n"
+        if "element" in result:
+            element = result["element"]
+            log_entry += f"  Function: {element['name']}\n"
+            log_entry += f"  Docstring: {element['docstring'] or 'No docstring available'}\n"
+            log_entry += f"  Start Line: {element['start_line']}\n"
+            log_entry += f"  End Line: {element['end_line']}\n"
+        else:
+            metadata = result["metadata"]
+            log_entry += f"  Number of Functions: {metadata['num_functions']}\n"
+            log_entry += f"  Number of Classes: {metadata['num_classes']}\n"
+        log_entry += f"  Distance: {dist}\n"
+        log_entry += "-" * 40 + "\n"
+    log_entry += f"\nGenerated Response:\n{response}\n"
+    log_entry += "=" * 80 + "\n\n"
+
+    log_file_path = "query_log.txt"
+
+    # Write log entry to the log file
+    with open(log_file_path, 'a') as log_file:
+        log_file.write(log_entry)
+
 def get_summary(file_path):
     summary_file_path = os.path.join('summaries', f"summary_{os.path.basename(file_path).replace('.py', '').replace(os.sep, '_')}.json")
     if os.path.exists(summary_file_path):
@@ -270,6 +297,9 @@ if __name__ == "__main__":
                     # Augment and generate a response based on retrieved information
                     generated_response = augment_and_generate(question, [res[0] for res in results])
                     print(f"Generated Response: {generated_response}")
+                    
+                    # Log the query, results, and response
+                    log_query_results(question, results, generated_response)
             else:
                 print("No relevant files found.")
         
@@ -326,3 +356,4 @@ if __name__ == "__main__":
         
         else:
             print("Invalid command or missing arguments.")
+
